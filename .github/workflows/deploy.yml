@@ -1,0 +1,101 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'terraform/**'
+      - 'app/**'
+      - '.github/workflows/**'
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPO_NAME: dev-ecr
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Create ECR repo 
+        run: |
+          repo_name=$(aws ecr describe-repositories --query "repositories[?repositoryName=='${{ env.ECR_REPO_NAME }}'].repositoryName" --output text --region ${{ env.AWS_REGION }})
+          if [ -z "$repo_name" ]; then
+            echo "Repository not found. Creating ECR repository: ${{ env.ECR_REPO_NAME }}"
+            aws ecr create-repository --repository-name ${{ env.ECR_REPO_NAME }} --region ${{ env.AWS_REGION }} 2>/dev/null
+          else
+            echo "Repository already exists: ${{ env.ECR_REPO_NAME }}"
+          fi
+
+      - name: Output Common variables
+        run: |
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID" >> $GITHUB_ENV
+          echo "ECR_REPO_URI=$AWS_ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_NAME }}" >> $GITHUB_ENV 
+
+      - name: Print common variables 
+        run: |
+          echo "Using ECR URI: $ECR_REPO_URI"
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REPO_URI 
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t myapp ./app/
+          docker tag myapp:latest  $ECR_REPO_URI:myapp
+          docker push  $ECR_REPO_URI:myapp
+
+  terraform:
+    runs-on: ubuntu-latest
+    needs: build
+    defaults:
+      run:
+        working-directory: ./terraform
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v1
+      with:
+        terraform_version: 1.6.6
+        terraform_wrapper: false
+
+    - name: Initialize Terraform
+      run: terraform init
+
+    - name: Terraform Plan
+      run: terraform plan
+
+    - name: Execute Terraform Apply
+      run: |
+        terraform apply -auto-approve
+    
+    - name: Handle output
+      id: export 
+      run: |
+        outputs=$(terraform output -json)
+        vpc_id=$(echo "$outputs" | jq -c .infrastructure_output.value.vpc_id)
+        echo "vpc_id=$vpc_id" >> $GITHUB_OUTPUT
+    
+    outputs:
+        vpc_id: ${{steps.export.outputs.vpc_id}}

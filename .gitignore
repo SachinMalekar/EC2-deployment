@@ -1,0 +1,11 @@
+.idea/
+venv/
+__pycache__/
+a-dustbin/
+.terraform/
+.terraform.lock.hcl 
+app/node_modules/*
+app/package-lock.json 
+# production
+/build
+
