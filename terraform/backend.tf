@@ -1,6 +1,6 @@
 terraform {
   backend "s3" {
-    bucket = "jayambar-terraform-backend"
+    bucket = "sachin-terraform-backend-2026"
     key = "noteapp-ec2/state.tfstate"
     region = "us-east-1"
     profile = "default"
