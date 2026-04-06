@@ -80,22 +80,25 @@ jobs:
         terraform_version: 1.6.6
         terraform_wrapper: false
 
-    - name: Initialize Terraform
-      run: terraform init
+    - name: Terraform Destroy
+      run: terraform destroy
 
-    - name: Terraform Plan
-      run: terraform plan
+    # - name: Initialize Terraform
+    #   run: terraform init
 
-    - name: Execute Terraform Apply
-      run: |
-        terraform apply -auto-approve
+    # - name: Terraform Plan
+    #   run: terraform plan
+
+    # - name: Execute Terraform Apply
+    #   run: |
+    #     terraform apply -auto-approve
     
-    - name: Handle output
-      id: export 
-      run: |
-        outputs=$(terraform output -json)
-        vpc_id=$(echo "$outputs" | jq -c .infrastructure_output.value.vpc_id)
-        echo "vpc_id=$vpc_id" >> $GITHUB_OUTPUT
+    # - name: Handle output
+    #   id: export 
+    #   run: |
+    #     outputs=$(terraform output -json)
+    #     vpc_id=$(echo "$outputs" | jq -c .infrastructure_output.value.vpc_id)
+    #     echo "vpc_id=$vpc_id" >> $GITHUB_OUTPUT
     
     outputs:
         vpc_id: ${{steps.export.outputs.vpc_id}}
